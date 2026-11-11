@@ -23,7 +23,7 @@ public class MyProjectPrototype : ModuleRules
 			"Slate"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { });
+		PrivateDependencyModuleNames.Add("ProceduralMeshComponent");
 
 		if (Target.bBuildEditor)
 		{

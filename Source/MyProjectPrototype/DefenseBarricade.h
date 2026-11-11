@@ -6,6 +6,7 @@
 
 class UBoxComponent;
 class UStaticMeshComponent;
+class UProceduralMeshComponent;
 
 UCLASS()
 class MYPROJECTPROTOTYPE_API ADefenseBarricade : public AActor
@@ -31,12 +32,17 @@ private:
     UPROPERTY(VisibleAnywhere, Category="Barricade") TObjectPtr<UBoxComponent> Blocker;
     UPROPERTY(VisibleAnywhere, Category="Barricade") TObjectPtr<UStaticMeshComponent> Wall;
     UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Cracks;
+    UPROPERTY(Transient) TArray<TObjectPtr<UProceduralMeshComponent>> Fragments;
     UPROPERTY(EditAnywhere, Category="Barricade", meta=(ClampMin="1")) float MaxHealth = 100.f;
     float Health = 100.f;
-    float CollapseTime = 0.f;
+    TArray<FVector> FragmentCenters;
+    FTimerHandle DebrisTimer;
     bool bStanding = true;
 
     bool IsSpaceOccupied() const;
     void SetStanding(bool bNewStanding);
     void UpdateCracks();
+    void PrepareFragments();
+    void ScatterFragments(const FVector& Impact);
+    void HideFragments();
 };
