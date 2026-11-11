@@ -1,5 +1,6 @@
 #include "DefensePrototypeManager.h"
 #include "ColonyCore.h"
+#include "DefenseBarricade.h"
 #include "Components/InputComponent.h"
 #include "InputCoreTypes.h"
 #include "MonsterCharacter.h"
@@ -28,6 +29,21 @@ void ADefensePrototypeManager::BeginPlay()
 {
     Super::BeginPlay();
     if(IsValid(Core)) Core->OnCoreDestroyed.AddDynamic(this,&ThisClass::OnCoreDestroyed);
+    if (UGameplayStatics::GetCurrentLevelName(this) == TEXT("Lvl_ApprovedLayout"))
+    {
+        auto PlaceSection = [this](const FVector& Position, float Yaw, const FVector& Extent)
+        {
+            auto* Section = GetWorld()->SpawnActor<ADefenseBarricade>(Position, FRotator(0, Yaw, 0));
+            if (Section) Section->SetDimensions(Extent);
+        };
+        for (int32 Section = 0; Section < 3; ++Section)
+        {
+            const double Offset = Section - 1;
+            PlaceSection(FVector(1500 + Offset * (800.0 / 3), 2000, 100), -90, FVector(90, 800.0 / 6, 100));
+            PlaceSection(FVector(2950, 3200 + Offset * (1000.0 / 3), 100), 0, FVector(90, 1000.0 / 6, 100));
+        }
+        PlaceSection(FVector(-2695, 2008, 100), -90, FVector(100, 260, 100));
+    }
     UpdateStatusDisplay();
     if(bAutoStart) StartRun();
 }
@@ -61,6 +77,9 @@ void ADefensePrototypeManager::SpawnNextEnemy()
 {
     if(Phase!=EDefensePhase::Wave || PendingSpawns<=0) return;
     UNavigationSystemV1* Nav=FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+    bool bHasStandingBarricade = false;
+    for (TActorIterator<ADefenseBarricade> It(GetWorld()); It; ++It)
+        if (It->IsStanding()) { bHasStandingBarricade = true; break; }
     bool bSpawned=false;
     for(int32 Attempt=0;Attempt<SpawnPoints.Num() && !bSpawned;++Attempt)
     {
@@ -68,8 +87,12 @@ void ADefensePrototypeManager::SpawnNextEnemy()
         if(!IsValid(Point) || !Nav || !IsValid(Core)) continue;
         FNavLocation Ground;
         if(!Nav->ProjectPointToNavigation(Point->GetActorLocation(),Ground,FVector(250,250,500))) continue;
-        UNavigationPath* Path=UNavigationSystemV1::FindPathToLocationSynchronously(GetWorld(),Ground.Location,Core->GetActorLocation());
-        if(!Path || !Path->IsValid() || Path->IsPartial()) continue;
+        if (!bHasStandingBarricade)
+        {
+            const UNavigationPath* Path = UNavigationSystemV1::FindPathToLocationSynchronously(
+                GetWorld(), Ground.Location, Core->GetActorLocation());
+            if (!Path || !Path->IsValid() || Path->IsPartial()) continue;
+        }
         FActorSpawnParameters Params;
         Params.Owner=this;
         Params.SpawnCollisionHandlingOverride=ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;

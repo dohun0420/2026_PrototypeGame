@@ -3,6 +3,9 @@
 #include "MyProjectPrototypeCharacter.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
+#include "DefenseBarricade.h"
+#include "EngineUtils.h"
+#include "InputCoreTypes.h"
 #include "DrawDebugHelpers.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -279,6 +282,7 @@ void AMyProjectPrototypeCharacter::StopAim()
 void AMyProjectPrototypeCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+    UpdateBarricadeRepair(DeltaTime);
 
 	const float TargetLength = bIsAiming ? 200.f : 400.f;
 
@@ -299,8 +303,55 @@ void AMyProjectPrototypeCharacter::Tick(float DeltaTime)
 		10.f);
 }
 
+void AMyProjectPrototypeCharacter::UpdateBarricadeRepair(float DeltaTime)
+{
+    const APlayerController* PC = Cast<APlayerController>(GetController());
+    if (!PC || !PC->IsLocalController() || !IsAlive() || PC->IsMoveInputIgnored())
+    {
+        bRepairingBarricade = false;
+        return;
+    }
+
+    const bool bRepairHeld = PC->IsInputKeyDown(EKeys::E);
+    if (!bRepairHeld) bRepairingBarricade = false;
+    RepairElapsed += DeltaTime;
+    if (RepairElapsed < .1f) return;
+    const float Elapsed = RepairElapsed;
+    RepairElapsed = 0.f;
+
+    ADefenseBarricade* Nearest = nullptr;
+    double BestDistance = FMath::Square(220.0);
+    const FVector Origin = GetActorLocation();
+    for (TActorIterator<ADefenseBarricade> It(GetWorld()); It; ++It)
+    {
+        ADefenseBarricade* Section = *It;
+        if (!Section->CanRepair()) continue;
+        const FVector Point = Section->GetStrikePoint(Origin);
+        const double Distance = FVector::DistSquared(Origin, Point);
+        if (Distance >= BestDistance) continue;
+
+        FHitResult Hit;
+        FCollisionQueryParams Query(SCENE_QUERY_STAT(BarricadeRepair), false, this);
+        if (GetWorld()->LineTraceSingleByChannel(Hit, Origin, Point, ECC_Visibility, Query)
+            && Hit.GetActor() != Section) continue;
+        Nearest = Section;
+        BestDistance = Distance;
+    }
+    bRepairingBarricade = Nearest && bRepairHeld;
+    if (!Nearest) return;
+    if (bRepairingBarricade) Nearest->Repair(15.f * Elapsed);
+    if (GEngine)
+    {
+        const TCHAR* Action = Nearest->IsStanding() ? TEXT("REPAIR") : TEXT("REBUILD");
+        GEngine->AddOnScreenDebugMessage(static_cast<uint64>(GetUniqueID()) | (1ull << 32),
+            .2f, FColor::Cyan, FString::Printf(TEXT("BARRICADE %.0f%% | HOLD E TO %s"),
+                Nearest->GetHealthFraction() * 100.f, Action));
+    }
+}
+
 void AMyProjectPrototypeCharacter::Fire()
 {
+    if (bRepairingBarricade) return;
     if (bIsDead) return;
 	if (IsValid(CurrentWeapon))
 	{
