@@ -21,12 +21,16 @@ public:
         AController* EventInstigator, AActor* DamageCauser) override;
 
     void SetDimensions(const FVector& HalfExtent);
-    bool IsStanding() const { return bStanding; }
+    virtual bool IsStanding() const { return bStanding; }
     float GetHealthFraction() const { return Health / MaxHealth; }
     FVector GetStrikePoint(const FVector& From) const;
     FVector GetApproachPoint(float Side) const;
     bool CanRepair() const { return !bStanding || Health < MaxHealth; }
     void Repair(float Amount);
+
+protected:
+    UBoxComponent* GetBlocker() const { return Blocker; }
+    UStaticMeshComponent* GetWallMesh() const { return Wall; }
 
 private:
     UPROPERTY(VisibleAnywhere, Category="Barricade") TObjectPtr<UBoxComponent> Blocker;
@@ -34,6 +38,8 @@ private:
     UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Cracks;
     UPROPERTY(Transient) TArray<TObjectPtr<UProceduralMeshComponent>> Fragments;
     UPROPERTY(EditAnywhere, Category="Barricade", meta=(ClampMin="1")) float MaxHealth = 100.f;
+    UPROPERTY(EditAnywhere, Category="Barricade|Destruction", meta=(ClampMin="0.0", Units="s", ToolTip="Seconds before debris is hidden. Zero keeps debris until the barricade is rebuilt."))
+    float DebrisLifetime = 20.f;
     float Health = 100.f;
     TArray<FVector> FragmentCenters;
     FTimerHandle DebrisTimer;

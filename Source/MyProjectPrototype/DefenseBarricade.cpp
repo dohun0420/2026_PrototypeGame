@@ -230,7 +230,7 @@ void ADefenseBarricade::PrepareFragments()
 void ADefenseBarricade::ScatterFragments(const FVector& Impact)
 {
     PrepareFragments();
-    const FVector Inward = -GetActorForwardVector();
+    const FVector Inward = -Blocker->GetForwardVector();
     FRandomStream Random(GetTypeHash(GetActorLocation()));
     int32 SimulatingCount = 0;
     for (UProceduralMeshComponent* Fragment : Fragments)
@@ -248,7 +248,10 @@ void ADefenseBarricade::ScatterFragments(const FVector& Impact)
     }
     UE_LOG(LogTemp, Display, TEXT("BARRICADE_SHATTER %s fragments=%d simulating=%d"),
         *GetName(), Fragments.Num(), SimulatingCount);
-    GetWorldTimerManager().SetTimer(DebrisTimer, this, &ADefenseBarricade::HideFragments, 5.f, false);
+    if (DebrisLifetime > 0.f)
+    {
+        GetWorldTimerManager().SetTimer(DebrisTimer, this, &ADefenseBarricade::HideFragments, DebrisLifetime, false);
+    }
 }
 
 void ADefenseBarricade::HideFragments()
@@ -267,7 +270,7 @@ void ADefenseBarricade::HideFragments()
 
 FVector ADefenseBarricade::GetStrikePoint(const FVector& From) const
 {
-    const FTransform Transform = GetActorTransform();
+    const FTransform Transform = Blocker->GetComponentTransform();
     const FVector Local = Transform.InverseTransformPosition(From);
     const FVector Extent = Blocker->GetUnscaledBoxExtent();
     const FVector Point(
@@ -279,14 +282,14 @@ FVector ADefenseBarricade::GetStrikePoint(const FVector& From) const
 
 FVector ADefenseBarricade::GetApproachPoint(float Side) const
 {
-    return GetActorTransform().TransformPosition(FVector(
+    return Blocker->GetComponentTransform().TransformPosition(FVector(
         Side * (Blocker->GetUnscaledBoxExtent().X + 90.f), 0, -Blocker->GetUnscaledBoxExtent().Z));
 }
 
 float ADefenseBarricade::TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent,
     AController* EventInstigator, AActor* DamageCauser)
 {
-    if (!bStanding || !Cast<AMonsterCharacter>(DamageCauser)
+    if (!IsStanding() || !Cast<AMonsterCharacter>(DamageCauser)
         || !FMath::IsFinite(DamageAmount) || DamageAmount <= 0.f) return 0.f;
     const float Applied = FMath::Min(Health, DamageAmount);
     Health -= Applied;
@@ -303,7 +306,7 @@ float ADefenseBarricade::TakeDamage(float DamageAmount, const FDamageEvent& Dama
 bool ADefenseBarricade::IsSpaceOccupied() const
 {
     FCollisionQueryParams Query(SCENE_QUERY_STAT(BarricadeRebuild), false, this);
-    return GetWorld()->OverlapAnyTestByObjectType(GetActorLocation(), GetActorQuat(),
+    return GetWorld()->OverlapAnyTestByObjectType(Blocker->GetComponentLocation(), Blocker->GetComponentQuat(),
         FCollisionObjectQueryParams(ECC_Pawn),
         FCollisionShape::MakeBox(Blocker->GetScaledBoxExtent()), Query);
 }

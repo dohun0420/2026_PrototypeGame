@@ -29,21 +29,6 @@ void ADefensePrototypeManager::BeginPlay()
 {
     Super::BeginPlay();
     if(IsValid(Core)) Core->OnCoreDestroyed.AddDynamic(this,&ThisClass::OnCoreDestroyed);
-    if (UGameplayStatics::GetCurrentLevelName(this) == TEXT("Lvl_ApprovedLayout"))
-    {
-        auto PlaceSection = [this](const FVector& Position, float Yaw, const FVector& Extent)
-        {
-            auto* Section = GetWorld()->SpawnActor<ADefenseBarricade>(Position, FRotator(0, Yaw, 0));
-            if (Section) Section->SetDimensions(Extent);
-        };
-        for (int32 Section = 0; Section < 3; ++Section)
-        {
-            const double Offset = Section - 1;
-            PlaceSection(FVector(1500 + Offset * (800.0 / 3), 2000, 100), -90, FVector(90, 800.0 / 6, 100));
-            PlaceSection(FVector(2950, 3200 + Offset * (1000.0 / 3), 100), 0, FVector(90, 1000.0 / 6, 100));
-        }
-        PlaceSection(FVector(-2695, 2008, 100), -90, FVector(100, 260, 100));
-    }
     UpdateStatusDisplay();
     if(bAutoStart) StartRun();
 }
