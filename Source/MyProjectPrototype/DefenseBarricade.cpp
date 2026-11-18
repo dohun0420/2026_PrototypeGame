@@ -79,7 +79,7 @@ void ClipCell(TArray<FFragmentFace>& Faces, const FVector& Normal, const FVector
 
 ADefenseBarricade::ADefenseBarricade()
 {
-    PrimaryActorTick.bCanEverTick = true;
+    PrimaryActorTick.bCanEverTick = false;
     PrimaryActorTick.bStartWithTickEnabled = false;
     Blocker = CreateDefaultSubobject<UBoxComponent>(TEXT("Blocker"));
     SetRootComponent(Blocker);
@@ -93,17 +93,6 @@ ADefenseBarricade::ADefenseBarricade()
     static ConstructorHelpers::FObjectFinder<UStaticMesh> Cube(TEXT("/Engine/BasicShapes/Cube.Cube"));
     Wall->SetStaticMesh(Cube.Object);
 
-    for (int32 Index = 0; Index < 12; ++Index)
-    {
-        const FName Name(*FString::Printf(TEXT("Crack_%d"), Index));
-        UStaticMeshComponent* Crack = CreateDefaultSubobject<UStaticMeshComponent>(Name);
-        Crack->SetupAttachment(Wall);
-        Crack->SetStaticMesh(Cube.Object);
-        Crack->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-        Crack->SetCanEverAffectNavigation(false);
-        Crack->SetVisibility(false);
-        Cracks.Add(Crack);
-    }
     SetDimensions(FVector(45, 135, 100));
 }
 
@@ -116,21 +105,6 @@ void ADefenseBarricade::SetDimensions(const FVector& HalfExtent)
     if (Blocker->IsRegistered()) FNavigationSystem::UpdateComponentData(*Blocker);
     Wall->SetRelativeScale3D(HalfExtent / 50.f);
 
-    const FVector Points[] = {
-        FVector(0, -30, 45), FVector(0, -15, 25), FVector(0, -22, 10),
-        FVector(0, 2, -8), FVector(0, -5, -29), FVector(0, 15, -45),
-        FVector(0, 34, -33)
-    };
-    for (int32 Index = 0; Index < Cracks.Num(); ++Index)
-    {
-        const int32 Segment = Index % 6;
-        const FVector Delta = Points[Segment + 1] - Points[Segment];
-        FVector Mid = (Points[Segment] + Points[Segment + 1]) * .5f;
-        Mid.X = Index < 6 ? -50.5f : 50.5f;
-        Cracks[Index]->SetRelativeLocation(Mid);
-        Cracks[Index]->SetRelativeRotation(FRotationMatrix::MakeFromX(Delta).Rotator());
-        Cracks[Index]->SetRelativeScale3D(FVector(Delta.Size() / 100.f, .025f, .025f));
-    }
 }
 
 void ADefenseBarricade::BeginPlay()
@@ -141,10 +115,6 @@ void ADefenseBarricade::BeginPlay()
     UMaterialInterface* Material = LoadObject<UMaterialInterface>(nullptr,
         TEXT("/Game/Prototype/Materials/MI_BlockoutStone.MI_BlockoutStone"));
     if (Material) Wall->SetMaterial(0, Material);
-    UMaterialInterface* CrackMaterial = LoadObject<UMaterialInterface>(nullptr,
-        TEXT("/Game/Prototype/Materials/MI_BlockoutWood.MI_BlockoutWood"));
-    if (CrackMaterial)
-        for (UStaticMeshComponent* Crack : Cracks) Crack->SetMaterial(0, CrackMaterial);
     GetWorldTimerManager().SetTimerForNextTick(this, &ADefenseBarricade::PrepareFragments);
 }
 
@@ -282,8 +252,12 @@ FVector ADefenseBarricade::GetStrikePoint(const FVector& From) const
 
 FVector ADefenseBarricade::GetApproachPoint(float Side) const
 {
-    return Blocker->GetComponentTransform().TransformPosition(FVector(
-        Side * (Blocker->GetUnscaledBoxExtent().X + 90.f), 0, -Blocker->GetUnscaledBoxExtent().Z));
+    const FVector Extent = Blocker->GetUnscaledBoxExtent();
+    const FVector FaceAtGround = Blocker->GetComponentTransform().TransformPosition(
+        FVector(Side * Extent.X, 0, -Extent.Z));
+    // Keep clearance in world units so scaled walls remain within melee reach
+    // even when Move To stops at the edge of its acceptance radius.
+    return FaceAtGround + Blocker->GetForwardVector() * Side * 90.f;
 }
 
 float ADefenseBarricade::TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent,
@@ -298,7 +272,6 @@ float ADefenseBarricade::TakeDamage(float DamageAmount, const FDamageEvent& Dama
         SetStanding(false);
         ScatterFragments(GetStrikePoint(DamageCauser->GetActorLocation()));
     }
-    UpdateCracks();
     UE_LOG(LogTemp, Display, TEXT("BARRICADE_HIT %s HP=%.0f"), *GetName(), Health);
     return Applied;
 }
@@ -322,9 +295,8 @@ void ADefenseBarricade::Repair(float Amount)
     {
         const float RebuildHealth = MaxHealth * .3f;
         Health = FMath::Min(RebuildHealth, Health + Amount);
-        if (Health >= RebuildHealth) SetActorTickEnabled(true);
+        if (Health >= RebuildHealth && !IsSpaceOccupied()) SetStanding(true);
     }
-    UpdateCracks();
 }
 
 void ADefenseBarricade::SetStanding(bool bNewStanding)
@@ -336,22 +308,4 @@ void ADefenseBarricade::SetStanding(bool bNewStanding)
     Wall->SetVisibility(bStanding);
     if (bStanding) HideFragments();
     UE_LOG(LogTemp, Display, TEXT("BARRICADE_%s %s"), bStanding ? TEXT("REBUILT") : TEXT("BROKEN"), *GetName());
-}
-
-void ADefenseBarricade::Tick(float DeltaSeconds)
-{
-    Super::Tick(DeltaSeconds);
-    if (!bStanding && Health >= MaxHealth * .3f && !IsSpaceOccupied())
-    {
-        SetStanding(true);
-        UpdateCracks();
-    }
-}
-
-void ADefenseBarricade::UpdateCracks()
-{
-    const float Fraction = GetHealthFraction();
-    const int32 VisibleSegments = Fraction <= .3f ? 6 : Fraction <= .7f ? 3 : 0;
-    for (int32 Index = 0; Index < Cracks.Num(); ++Index)
-        Cracks[Index]->SetVisibility(bStanding && Index % 6 < VisibleSegments);
 }

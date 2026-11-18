@@ -20,6 +20,7 @@
 AMonsterCharacter::AMonsterCharacter()
 {
     PrimaryActorTick.bCanEverTick = false;
+    Tags.AddUnique(TEXT("Monster"));
     AIControllerClass = AMonsterAIController::StaticClass();
     AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 

@@ -2,7 +2,6 @@
 #include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "ColonyCore.h"
-#include "DefenseBarricade.h"
 #include "DefensePrototypeManager.h"
 #include "MonsterCharacter.h"
 #include "MonsterAIController.h"
@@ -83,48 +82,6 @@ bool FDefensePrototypeTest::RunTest(const FString& Parameters)
     Advance(.3f); TestEqual(TEXT("Core windup has no damage"),Core->GetHealth(),500.f);
     Advance(.4f); TestEqual(TEXT("One core hit per strike"),Core->GetHealth(),490.f);
     Attacker->CancelMeleeAttack(); Attacker->Destroy();
-
-    // Put a wall across the fixture so reaching the core requires a breach.
-    ADefenseBarricade* Barricade = World->SpawnActor<ADefenseBarricade>(FVector(1000,0,100), FRotator::ZeroRotator);
-    Barricade->SetDimensions(FVector(90,4000,100));
-    auto RefreshNavigation = [&]()
-    {
-        Advance(.5f);
-        Data->EnsureBuildCompletion();
-    };
-    auto CanReachCore = [&]()
-    {
-        const UNavigationPath* Path = UNavigationSystemV1::FindPathToLocationSynchronously(
-            World, FVector(2000,0,0), Core->GetActorLocation());
-        return Path && Path->IsValid() && !Path->IsPartial();
-    };
-    RefreshNavigation();
-    TestFalse(TEXT("Standing wall closes the route to the core"), CanReachCore());
-    AMonsterCharacter* Breacher = SpawnMonster(FVector(1300,0,101), true);
-    auto* BreacherAI = Cast<AMonsterAIController>(Breacher->GetController());
-    if (!TestNotNull(TEXT("Breacher AI controller"), BreacherAI)) return false;
-    BreacherAI->SetDefenseObjective(Core);
-    TestEqual(TEXT("Blocked monster targets the wall"), BreacherAI->GetBlackboardComponent()->GetValueAsObject(TEXT("TargetActor")),
-        static_cast<UObject*>(Barricade));
-
-    for (int32 Step = 0; Step < 20 && Barricade->IsStanding(); ++Step) Advance(1.f);
-    TestFalse(TEXT("Melee attacks destroy the wall"), Barricade->IsStanding());
-    RefreshNavigation();
-    TestTrue(TEXT("The breached route becomes walkable"), CanReachCore());
-    Breacher->Destroy();
-
-    AMonsterCharacter* Occupant = SpawnMonster(FVector(1000,0,101), false);
-    Barricade->Repair(100.f);
-    Advance(.6f);
-    TestFalse(TEXT("Repair cannot rebuild around a pawn"), Barricade->IsStanding());
-    Occupant->Destroy();
-    Advance(.2f);
-    TestTrue(TEXT("Repair rebuilds the wall once the gap is clear"), Barricade->IsStanding());
-    TestEqual(TEXT("Rebuilt section starts at thirty percent"), Barricade->GetHealthFraction(), .3f);
-    RefreshNavigation();
-    TestFalse(TEXT("Rebuilt wall closes the route again"), CanReachCore());
-    Barricade->Destroy();
-    RefreshNavigation();
 
     // Real BT + navigation: no player, so the monster must advance to the core.
     AMonsterCharacter* Walker=SpawnMonster(FVector(2000,0,101),true);

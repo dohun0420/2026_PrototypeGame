@@ -16,7 +16,6 @@ class MYPROJECTPROTOTYPE_API ADefenseBarricade : public AActor
 public:
     ADefenseBarricade();
     virtual void BeginPlay() override;
-    virtual void Tick(float DeltaSeconds) override;
     virtual float TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent,
         AController* EventInstigator, AActor* DamageCauser) override;
 
@@ -35,7 +34,6 @@ protected:
 private:
     UPROPERTY(VisibleAnywhere, Category="Barricade") TObjectPtr<UBoxComponent> Blocker;
     UPROPERTY(VisibleAnywhere, Category="Barricade") TObjectPtr<UStaticMeshComponent> Wall;
-    UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Cracks;
     UPROPERTY(Transient) TArray<TObjectPtr<UProceduralMeshComponent>> Fragments;
     UPROPERTY(EditAnywhere, Category="Barricade", meta=(ClampMin="1")) float MaxHealth = 100.f;
     UPROPERTY(EditAnywhere, Category="Barricade|Destruction", meta=(ClampMin="0.0", Units="s", ToolTip="Seconds before debris is hidden. Zero keeps debris until the barricade is rebuilt."))
@@ -47,7 +45,6 @@ private:
 
     bool IsSpaceOccupied() const;
     void SetStanding(bool bNewStanding);
-    void UpdateCracks();
     void PrepareFragments();
     void ScatterFragments(const FVector& Impact);
     void HideFragments();

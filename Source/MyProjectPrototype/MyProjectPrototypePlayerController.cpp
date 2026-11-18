@@ -8,6 +8,9 @@
 #include "Blueprint/UserWidget.h"
 #include "MyProjectPrototype.h"
 #include "Widgets/Input/SVirtualJoystick.h"
+#include "ColonyTravelSubsystem.h"
+#include "Components/InputComponent.h"
+#include "InputCoreTypes.h"
 
 void AMyProjectPrototypePlayerController::BeginPlay()
 {
@@ -49,6 +52,15 @@ void AMyProjectPrototypePlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
 
+	if (InputComponent)
+	{
+		InputComponent->BindKey(
+			EKeys::E,
+			IE_Pressed,
+			this,
+			&ThisClass::TryColonyTravelInteraction);
+	}
+
 	// only add IMCs for local player controllers
 	if (IsLocalPlayerController())
 	{
@@ -68,6 +80,18 @@ void AMyProjectPrototypePlayerController::SetupInputComponent()
 					Subsystem->AddMappingContext(CurrentContext, 0);
 				}
 			}
+		}
+	}
+}
+
+void AMyProjectPrototypePlayerController::TryColonyTravelInteraction()
+{
+	if (UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (UColonyTravelSubsystem* TravelSubsystem =
+			GameInstance->GetSubsystem<UColonyTravelSubsystem>())
+		{
+			TravelSubsystem->TryInteract(this);
 		}
 	}
 }
