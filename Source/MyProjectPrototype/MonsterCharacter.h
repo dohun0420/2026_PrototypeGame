@@ -18,6 +18,7 @@ public:
 	AMonsterCharacter();
 
     bool TryStartMeleeAttack(AActor* Target);
+    bool CanReachMeleeTarget(AActor* Target) const { return IsValidAttackTarget(Target, false); }
     void CancelMeleeAttack();
     bool IsAttackInProgress() const { return bAttackInProgress; }
     bool IsAlive() const { return !bIsDead && CurrentHealth > 0.f; }

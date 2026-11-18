@@ -11,6 +11,10 @@
 #include "MonsterCharacter.h"
 #include "MyProjectPrototypeCharacter.h"
 #include "ColonyCore.h"
+#include "DefenseBarricade.h"
+#include "EngineUtils.h"
+#include "NavigationPath.h"
+#include "NavigationSystem.h"
 
 static bool IsLivingPlayerPawn(APawn* Pawn)
 {
@@ -200,7 +204,65 @@ void AMonsterAIController::UpdateDefenseObjective()
     AMonsterCharacter* Monster=Cast<AMonsterCharacter>(GetPawn());
     UBlackboardComponent* BB=GetBlackboardComponent();
     if(!BB || !IsValid(Objective) || !Objective->IsAlive() || !Monster || !Monster->IsAlive()) return;
+    const FVector Origin = Monster->GetNavAgentLocation();
+    auto HasRoute = [this, &Origin](const FVector& Destination)
+    {
+        const UNavigationPath* Path = UNavigationSystemV1::FindPathToLocationSynchronously(
+            GetWorld(), Origin, Destination, this);
+        return Path && Path->IsValid() && !Path->IsPartial();
+    };
+
     const FVector Goal=Objective->GetActorLocation();
+    bool bHasBarricades = false;
+    for (TActorIterator<ADefenseBarricade> It(GetWorld()); It; ++It)
+        if (It->IsStanding()) { bHasBarricades = true; break; }
+
+    if (bHasBarricades && !Monster->CanReachMeleeTarget(Objective) && !HasRoute(Goal))
+    {
+        ADefenseBarricade* Selected = nullptr;
+        FVector Approach = FVector::ZeroVector;
+        double BestDistance = TNumericLimits<double>::Max();
+        UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+        for (TActorIterator<ADefenseBarricade> It(GetWorld()); Nav && It; ++It)
+        {
+            ADefenseBarricade* Section = *It;
+            if (!Section->IsStanding() || (Selected && Section->GetHealthFraction() > Selected->GetHealthFraction()))
+                continue;
+
+            for (float Side : {-1.f, 1.f})
+            {
+                const FVector Point = Section->GetApproachPoint(Side);
+                FNavLocation Projected;
+                if (!Nav->ProjectPointToNavigation(Point, Projected, FVector(45, 45, 100))) continue;
+                const double Distance = FVector::DistSquared2D(Origin, Projected.Location);
+                const bool bTiedHealth = Selected && Section->GetHealthFraction() == Selected->GetHealthFraction();
+                if (bTiedHealth && Distance >= BestDistance) continue;
+
+                FCollisionQueryParams Occupancy(SCENE_QUERY_STAT(BarricadeApproach), false, Monster);
+                const bool bCrowded = GetWorld()->OverlapAnyTestByObjectType(Projected.Location + FVector(0, 0, 90),
+                    FQuat::Identity, FCollisionObjectQueryParams(ECC_Pawn), FCollisionShape::MakeSphere(38), Occupancy);
+                if (bCrowded || !HasRoute(Projected.Location)) continue;
+
+                Selected = Section;
+                Approach = Projected.Location;
+                BestDistance = Distance;
+            }
+        }
+        if (!Selected)
+        {
+            if (BB->GetValueAsObject(TEXT("TargetActor"))) ForgetTarget();
+            return;
+        }
+        BB->SetValueAsObject(TEXT("TargetActor"), Selected);
+        BB->SetValueAsVector(TEXT("MoveGoal"), Approach);
+        BB->SetValueAsBool(TEXT("HasLastKnown"), false);
+        BB->SetValueAsBool(TEXT("HasSight"), true);
+        const bool bCanAttack = Monster->CanReachMeleeTarget(Selected);
+        BB->SetValueAsBool(TEXT("IsNearTarget"), bCanAttack);
+        SetState(bCanAttack ? TEXT("AttackingBarricade") : TEXT("AdvancingToBarricade"));
+        return;
+    }
+
     const float Gap=FMath::Max(0.f,FVector::Dist2D(Monster->GetActorLocation(),Goal)
         -Monster->GetCapsuleComponent()->GetScaledCapsuleRadius()-Objective->GetTargetRadius());
     const bool bClose=Gap<=StopSurfaceDistance && FMath::Abs(Monster->GetActorLocation().Z-Goal.Z)<=100.f;

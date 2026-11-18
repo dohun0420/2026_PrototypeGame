@@ -9,6 +9,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "MyProjectPrototypeCharacter.h"
 #include "ColonyCore.h"
+#include "DefenseBarricade.h"
 #include "BrainComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
@@ -19,6 +20,7 @@
 AMonsterCharacter::AMonsterCharacter()
 {
     PrimaryActorTick.bCanEverTick = false;
+    Tags.AddUnique(TEXT("Monster"));
     AIControllerClass = AMonsterAIController::StaticClass();
     AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 
@@ -117,9 +119,14 @@ bool AMonsterCharacter::IsValidAttackTarget(AActor* Target, bool bCheckDirection
     if (!IsAlive() || !IsValid(Target)) return false;
     const AMyProjectPrototypeCharacter* Player = Cast<AMyProjectPrototypeCharacter>(Target);
     const AColonyCore* Core = Cast<AColonyCore>(Target);
-    if ((!Player || !Player->IsAlive()) && (!Core || !Core->IsAlive())) return false;
-    const float TargetRadius = Player ? Player->GetCapsuleComponent()->GetScaledCapsuleRadius() : Core->GetTargetRadius();
-    const FVector Delta = Target->GetActorLocation() - GetActorLocation();
+    const ADefenseBarricade* Barricade = Cast<ADefenseBarricade>(Target);
+    if ((!Player || !Player->IsAlive()) && (!Core || !Core->IsAlive())
+        && (!Barricade || !Barricade->IsStanding())) return false;
+    float TargetRadius = 0.f;
+    if (Player) TargetRadius = Player->GetCapsuleComponent()->GetScaledCapsuleRadius();
+    if (Core) TargetRadius = Core->GetTargetRadius();
+    const FVector StrikePoint = Barricade ? Barricade->GetStrikePoint(GetActorLocation()) : Target->GetActorLocation();
+    const FVector Delta = StrikePoint - GetActorLocation();
     const float Gap = FMath::Max(0.f, Delta.Size2D()
         - GetCapsuleComponent()->GetScaledCapsuleRadius()
         - TargetRadius);
@@ -127,7 +134,7 @@ bool AMonsterCharacter::IsValidAttackTarget(AActor* Target, bool bCheckDirection
     if (bCheckDirection && FVector::DotProduct(Delta.GetSafeNormal2D(), AttackForward) < .573576f) return false;
     FHitResult Hit;
     FCollisionQueryParams Params(SCENE_QUERY_STAT(MonsterAttackVisibility), false, this);
-    const bool bBlocked = GetWorld()->LineTraceSingleByChannel(Hit, GetActorLocation(), Target->GetActorLocation(), ECC_Visibility, Params);
+    const bool bBlocked = GetWorld()->LineTraceSingleByChannel(Hit, GetActorLocation(), StrikePoint, ECC_Visibility, Params);
     return !bBlocked || Hit.GetActor() == Target;
 }
 
@@ -135,7 +142,9 @@ bool AMonsterCharacter::TryStartMeleeAttack(AActor* Target)
 {
     if (bAttackInProgress || GetWorld()->GetTimeSeconds() < NextAttackTime || !IsValidAttackTarget(Target, false)) return false;
     AttackTarget = Target;
-    AttackForward = (Target->GetActorLocation() - GetActorLocation()).GetSafeNormal2D();
+    const ADefenseBarricade* Barricade = Cast<ADefenseBarricade>(Target);
+    const FVector StrikePoint = Barricade ? Barricade->GetStrikePoint(GetActorLocation()) : Target->GetActorLocation();
+    AttackForward = (StrikePoint - GetActorLocation()).GetSafeNormal2D();
     if (AttackForward.IsNearlyZero()) AttackForward = GetActorForwardVector();
     bAttackInProgress = true;
     bDamageApplied = false;

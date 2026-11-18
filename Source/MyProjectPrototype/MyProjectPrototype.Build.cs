@@ -20,15 +20,17 @@ public class MyProjectPrototype : ModuleRules
 			"StateTreeModule",
 			"GameplayStateTreeModule",
 			"UMG",
-			"Slate"
+			"Slate",
+			"SlateCore"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { });
+		PrivateDependencyModuleNames.Add("ProceduralMeshComponent");
 
 		if (Target.bBuildEditor)
 		{
 			PrivateDependencyModuleNames.AddRange(new string[] {
-				"UnrealEd", "BehaviorTreeEditor", "AIGraph", "AssetRegistry"
+				"UnrealEd", "BehaviorTreeEditor", "AIGraph", "AssetRegistry",
+				"AssetTools", "MaterialEditor"
 			});
 		}
 

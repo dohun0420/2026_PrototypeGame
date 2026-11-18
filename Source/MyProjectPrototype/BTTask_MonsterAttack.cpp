@@ -3,6 +3,7 @@
 #include "MonsterCharacter.h"
 #include "MyProjectPrototypeCharacter.h"
 #include "ColonyCore.h"
+#include "DefenseBarricade.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "BehaviorTree/BlackboardComponent.h"
 
@@ -29,7 +30,9 @@ void UBTTask_MonsterAttack::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* N
     AActor* Target = BB ? Cast<AActor>(BB->GetValueAsObject(TEXT("TargetActor"))) : nullptr;
     const AMyProjectPrototypeCharacter* Player=Cast<AMyProjectPrototypeCharacter>(Target);
     const AColonyCore* Core=Cast<AColonyCore>(Target);
-    const bool bLivingTarget=(IsValid(Player) && Player->IsAlive()) || (IsValid(Core) && Core->IsAlive());
+    const ADefenseBarricade* Barricade = Cast<ADefenseBarricade>(Target);
+    const bool bLivingTarget = (IsValid(Player) && Player->IsAlive())
+        || (IsValid(Core) && Core->IsAlive()) || (IsValid(Barricade) && Barricade->IsStanding());
     if (!IsValid(Monster) || !Monster->IsAlive() || !bLivingTarget)
     {
         if (IsValid(Monster)) Monster->CancelMeleeAttack();

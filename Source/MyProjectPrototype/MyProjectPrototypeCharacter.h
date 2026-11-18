@@ -129,6 +129,9 @@ protected:
 	UInputAction* FireAction;
 
 	void Fire();
+    void UpdateBarricadeRepair(float DeltaTime);
+    float RepairElapsed = 0.f;
+    bool bRepairingBarricade = false;
 
 	UPROPERTY()
 	TObjectPtr<AWeaponBase> CurrentWeapon = nullptr;
