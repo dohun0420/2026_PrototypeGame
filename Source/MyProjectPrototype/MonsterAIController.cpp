@@ -258,6 +258,14 @@ void AMonsterAIController::UpdateDefenseObjective()
         BB->SetValueAsBool(TEXT("HasLastKnown"), false);
         BB->SetValueAsBool(TEXT("HasSight"), true);
         const bool bCanAttack = Monster->CanReachMeleeTarget(Selected);
+
+        UE_LOG(LogTemp, Display, TEXT("BARRICADE_DBG %s toApproach=%.0f toBarricade=%.0f dz=%.0f canAttack=%d"),
+            *Monster->GetName(),
+            FVector::Dist2D(Monster->GetActorLocation(), Approach),
+            FVector::Dist2D(Monster->GetActorLocation(), Selected->GetActorLocation()),
+            Monster->GetActorLocation().Z - Selected->GetActorLocation().Z,
+            bCanAttack ? 1 : 0);
+
         BB->SetValueAsBool(TEXT("IsNearTarget"), bCanAttack);
         SetState(bCanAttack ? TEXT("AttackingBarricade") : TEXT("AdvancingToBarricade"));
         return;
